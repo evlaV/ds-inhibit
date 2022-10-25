@@ -18,7 +18,8 @@ class Inhibitor:
 
     @staticmethod
     def get_nodes(hidraw: int) -> list[str]:
-        return glob.glob(f'/sys/class/hidraw/hidraw{hidraw}/device/input/input*/inhibited')
+        devs = glob.glob(f'/sys/class/hidraw/hidraw{hidraw}/device/input/input*')
+        return [f'{path}/inhibited' for path in devs if any(glob.glob(f'{path}/mouse*'))]
 
     @classmethod
     def inhibit(cls, hidraw: int):
