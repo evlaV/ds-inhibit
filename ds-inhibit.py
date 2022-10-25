@@ -152,8 +152,12 @@ class InhibitionServer:
     def do_inhibit(self, fd, id):
         if id in self.sockets[fd]:
             return
+        try:
+            Inhibitor.inhibit(id)
+        except PermissionError as e:
+            logger.warning(f'Could not inhibit {id}', exc_info=e)
+            return
         self.sockets[fd].add(id)
-        Inhibitor.inhibit(id)
 
     def do_uninhibit(self, fd, id):
         if id not in self.sockets[fd]:
