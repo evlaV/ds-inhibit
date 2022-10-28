@@ -1,3 +1,8 @@
+#  SPDX-License-Identifier: BSD-2-Clause
+#
+#  Copyright (c) 2022 Valve Software
+#  Author: Vicki Pfau <vi@endrift.com>
+
 # DualShock 4 over USB
 SUBSYSTEM=="input", ENV{ID_VENDOR_ID}=="054c", ENV{ID_MODEL_ID}=="05c4", RUN+="/usr/bin/ds-inhibit-register %p"
 SUBSYSTEM=="input", ENV{ID_VENDOR_ID}=="054c", ENV{ID_MODEL_ID}=="0ba0", RUN+="/usr/bin/ds-inhibit-register %p"

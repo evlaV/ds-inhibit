@@ -1,4 +1,9 @@
 #!/usr/bin/python
+# SPDX-License-Identifier: BSD-2-Clause
+# vim:ts=4:sw=4:et
+#
+# Copyright (c) 2022 Valve Software
+# Maintainer: Vicki Pfau <vi@endrift.com>
 import glob
 import logging
 import os
