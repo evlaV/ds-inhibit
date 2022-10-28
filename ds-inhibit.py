@@ -150,6 +150,6 @@ class InhibitionServer:
 
 
 if __name__ == '__main__':
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     server = InhibitionServer()
     server.serve()
