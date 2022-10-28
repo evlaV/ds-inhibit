@@ -9,6 +9,7 @@ import logging
 import os
 import pyinotify
 import re
+import time
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
@@ -89,8 +90,9 @@ class InhibitionServer:
             Inhibitor.uninhibit(match.group(1))
 
     def _node_added(self, ev):
-        logger.debug(f'New node {ev.path} found')
-        self.watch(ev.path)
+        logger.debug(f'New node {ev.pathname} found')
+        time.sleep(0.25)  # Wait a quarter second for nodes to enumerate
+        self.watch(ev.pathname)
 
     def _hidraw_process(self, ev):
         if ev.mask & pyinotify.IN_DELETE_SELF:
