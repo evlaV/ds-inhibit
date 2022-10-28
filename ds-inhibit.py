@@ -25,9 +25,12 @@ class Inhibitor:
 
     @classmethod
     def can_inhibit(cls, id: int) -> bool:
+        logger.debug(f'Checking if hidraw{id} can be inhibited')
         for node in cls.get_nodes(id):
             if not os.access(node, os.W_OK):
+                logger.debug(f'Node {node} cannot be inhibited')
                 return False
+            logger.debug(f'Node {node} can be inhibited')
         return True
 
     @classmethod
@@ -52,6 +55,7 @@ class InhibitionServer:
     def watch(self, hidraw):
         match = self.MATCH.match(hidraw)
         if not match:
+            logger.debug(f'New node {hidraw} is not a hidraw')
             return
         if not Inhibitor.can_inhibit(match.group(1)):
             return
@@ -81,6 +85,7 @@ class InhibitionServer:
             Inhibitor.uninhibit(match.group(1))
 
     def _node_added(self, ev):
+        logger.debug(f'New node {ev.path} found')
         self.watch(ev.path)
 
     def _hidraw_process(self, ev):
