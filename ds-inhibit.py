@@ -26,7 +26,11 @@ class Inhibitor:
     @classmethod
     def can_inhibit(cls, id: int) -> bool:
         logger.debug(f'Checking if hidraw{id} can be inhibited')
-        for node in cls.get_nodes(id):
+        nodes = cls.get_nodes(id)
+        if not nodes:
+            logger.debug(f'No nodes to inhibit')
+            return False
+        for node in nodes:
             if not os.access(node, os.W_OK):
                 logger.debug(f'Node {node} cannot be inhibited')
                 return False
