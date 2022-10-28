@@ -1,0 +1,15 @@
+# DualShock 4 over USB
+SUBSYSTEM=="input", ENV{ID_VENDOR_ID}=="054c", ENV{ID_MODEL_ID}=="05c4", RUN+="/usr/bin/ds-inhibit-register %p"
+SUBSYSTEM=="input", ENV{ID_VENDOR_ID}=="054c", ENV{ID_MODEL_ID}=="0ba0", RUN+="/usr/bin/ds-inhibit-register %p"
+SUBSYSTEM=="input", ENV{ID_VENDOR_ID}=="054c", ENV{ID_MODEL_ID}=="09cc", RUN+="/usr/bin/ds-inhibit-register %p"
+
+# DualShock 4 over bluetooth
+SUBSYSTEM=="input" ENV{PRODUCT}=="*/54c/5c4/*", RUN+="/usr/bin/ds-inhibit-register %p"
+SUBSYSTEM=="input" ENV{PRODUCT}=="*/54c/ba0/*", RUN+="/usr/bin/ds-inhibit-register %p"
+SUBSYSTEM=="input" ENV{PRODUCT}=="*/54c/9cc/*", RUN+="/usr/bin/ds-inhibit-register %p"
+
+# PS5 DualSense controller over USB
+SUBSYSTEM=="input", ENV{ID_VENDOR_ID}=="054c", ENV{ID_MODEL_ID}=="0ce6", RUN+="/usr/bin/ds-inhibit-register %p"
+
+# PS5 DualSense over bluetooth
+SUBSYSTEM=="input" ENV{PRODUCT}=="*/54c/ce6/*", RUN+="/usr/bin/ds-inhibit-register %p"

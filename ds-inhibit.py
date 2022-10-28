@@ -1,10 +1,8 @@
 import glob
 import logging
 import os
-import select
-import shutil
-import socket
-import struct
+import pyinotify
+import re
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
@@ -14,159 +12,116 @@ logger.addHandler(handler)
 
 
 class Inhibitor:
-    inhibitions = {}
-
-    @staticmethod
-    def get_nodes(hidraw: int) -> list[str]:
-        devs = glob.glob(f'/sys/class/hidraw/hidraw{hidraw}/device/input/input*')
-        return [f'{path}/inhibited' for path in devs if any(glob.glob(f'{path}/mouse*'))]
+    @classmethod
+    def get_nodes(cls, id: int) -> list[str]:
+        devs = glob.glob(f'/sys/class/hidraw/hidraw{id}/device/input/input*')
+        return [f'{d}/inhibited' for d in devs if glob.glob(f'{d}/mouse*')]
 
     @classmethod
-    def inhibit(cls, hidraw: int):
-        if hidraw in cls.inhibitions:
-            cls.inhibitions[hidraw] += 1
-            return
+    def can_inhibit(cls, id: int) -> bool:
+        for node in cls.get_nodes(id):
+            if not os.access(node, os.W_OK):
+                return False
+        return True
 
-        for node in cls.get_nodes(hidraw):
+    @classmethod
+    def inhibit(cls, id: int):
+        for node in cls.get_nodes(id):
             with open(node, 'w') as f:
                 f.write('1\n')
-        cls.inhibitions[hidraw] = 1
 
     @classmethod
-    def uninhibit(cls, hidraw: int):
-        i = cls.inhibitions.get(hidraw)
-        if i is None:
-            return
-        i -= 1
-        if i:
-            cls.inhibitions[hidraw] = i
-            return
-
-        del cls.inhibitions[hidraw]
-        for node in cls.get_nodes(hidraw):
+    def uninhibit(cls, id: int):
+        for node in cls.get_nodes(id):
             with open(node, 'w') as f:
                 f.write('0\n')
 
 
 class InhibitionServer:
-    CMD_INHIBIT = 1
-    CMD_UNINHIBIT = 2
-    CMD_SHUTDOWN = 0xFF
-
-    SOCKPATH = '/tmp/ds-inhibit'
+    MATCH = re.compile(r'^/dev/hidraw(\d+)$')
 
     def __init__(self):
-        self._server = None
-        self.sockets = {}
-        self._parse = struct.Struct('IB')
+        self.running = False
+
+    def watch(self, hidraw):
+        match = self.MATCH.match(hidraw)
+        if not match:
+            return
+        if not Inhibitor.can_inhibit(match.group(1)):
+            return
+        logger.info(f'Adding {hidraw} to watchlist')
+        self._inotify.add_watch(hidraw, pyinotify.IN_DELETE_SELF |
+                                pyinotify.IN_OPEN |
+                                pyinotify.IN_CLOSE_NOWRITE |
+                                pyinotify.IN_CLOSE_WRITE,
+                                proc_fun=self._hidraw_process)
+        self._check(hidraw)
 
     def _start(self):
         logger.info('Starting server')
-        self._server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self._server.bind(self.SOCKPATH)
-        os.chmod(self.SOCKPATH, 0o660)
-        shutil.chown(self.SOCKPATH, group='input')
-        self._server.listen()
-        self.sockets[self._server.fileno()] = 'server'
-        self._poll = select.poll()
-        self._poll.register(self._server.fileno(), select.POLLIN)
+        self._inotify = pyinotify.WatchManager()
+        self._inotify.add_watch('/dev', pyinotify.IN_CREATE,
+                                proc_fun=self._node_added)
+        for hidraw in glob.glob('/dev/hidraw*'):
+            self.watch(hidraw)
         self.running = True
 
     def _stop(self):
         logger.info('Stopping server')
-        for fd, hidraws in self.sockets.items():
-            if hidraws == 'server':
+
+    def _node_added(self, ev):
+        self.watch(ev.path)
+
+    def _hidraw_process(self, ev):
+        if ev.mask & pyinotify.IN_DELETE_SELF:
+            self._inotify.del_watch(ev.wd)
+            return
+        self._check(ev.path)
+
+    def _check(self, hidraw: str):
+        open_procs = []
+        match = self.MATCH.match(hidraw)
+        if not match:
+            return
+        for proc in os.listdir('/proc'):
+            if not proc.isnumeric():
                 continue
-            os.close(fd)
-            for hidraw in hidraws:
-                Inhibitor.uninhibit(hidraw)
-        self._server.close()
-        self.sockets = {}
-        self._server = None
-        self._poll = None
-        os.unlink(self.SOCKPATH)
+            if not os.access(f'/proc/{proc}/fd', os.R_OK):
+                continue
+            for fd in os.listdir(f'/proc/{proc}/fd'):
+                try:
+                    path = os.readlink(f'/proc/{proc}/fd/{fd}')
+                except FileNotFoundError:
+                    continue
+                if not path or path != hidraw:
+                    continue
+                open_procs.append(proc)
+        steam = False
+        for proc in open_procs:
+            with open(f'/proc/{proc}/comm') as f:
+                procname = f.read()
+            if not procname:
+                continue
+            if procname.rstrip() == 'steam':
+                steam = True
+        if steam:
+            logger.info(f'Inhibiting {hidraw}')
+            Inhibitor.inhibit(match.group(1))
+        else:
+            logger.info(f'Uninhibiting {hidraw}')
+            Inhibitor.uninhibit(match.group(1))
 
     def poll(self):
-        ev = self._poll.poll()
-        for fd, event in ev:
-            inhibitions = self.sockets.get(fd)
-            if inhibitions is None:
-                continue
-
-            if inhibitions == 'server':
-                sock, addr = self._server.accept()
-                self.register_client(sock.detach())
-                continue
-
-            logger.debug(f'Got events {event:X} on {fd}')
-            if event & select.POLLHUP:
-                self.unregister_client(fd)
-                continue
-            if event & select.POLLIN:
-                message = os.read(fd, 5)
-                if len(message) < 5:
-                    logger.warning(f'Got truncated message from {fd}, discarding')
-                else:
-                    self.process_message(fd, message)
-
-    def register_client(self, fd):
-        logger.info(f'Registering client on socket {fd}')
-        self.sockets[fd] = set()
-        self._poll.register(fd, select.POLLIN | select.POLLHUP)
-
-    def unregister_client(self, fd):
-        logger.info(f'Unregistering client on socket {fd}')
-        try:
-            os.close(fd)
-        except OSError:
-            pass
-        for hidraw in self.sockets[fd]:
-            Inhibitor.uninhibit(hidraw)
-        self._poll.unregister(fd)
-        del self.sockets[fd]
-
-    def process_message(self, fd, message):
-        id, cmd = self._parse.unpack(message)
-        logger.debug(f'Got message {id:08X}:{cmd:02X} on {fd}')
-        if cmd == self.CMD_INHIBIT:
-            logger.debug(f'Got INHIBIT {id} on {fd}')
-            self.do_inhibit(fd, id)
-        elif cmd == self.CMD_UNINHIBIT:
-            logger.debug(f'Got UNINHIBIT {id} on {fd}')
-            self.do_uninhibit(fd, id)
-        elif cmd == self.CMD_SHUTDOWN:
-            logger.debug(f'Got SHUTDOWN on {fd}')
-            self.do_shutdown()
+        notifier = pyinotify.Notifier(self._inotify)
+        notifier.loop()
 
     def serve(self):
         self._start()
 
         while self.running:
-            try:
-                self.poll()
-            except (KeyboardInterrupt, OSError):
-                self.running = False
+            self.poll()
 
         self._stop()
-
-    def do_inhibit(self, fd, id):
-        if id in self.sockets[fd]:
-            return
-        try:
-            Inhibitor.inhibit(id)
-        except PermissionError as e:
-            logger.warning(f'Could not inhibit {id}', exc_info=e)
-            return
-        self.sockets[fd].add(id)
-
-    def do_uninhibit(self, fd, id):
-        if id not in self.sockets[fd]:
-            return
-        self.sockets[fd].remove(id)
-        Inhibitor.uninhibit(id)
-
-    def do_shutdown(self):
-        self.running = False
 
 
 if __name__ == '__main__':
