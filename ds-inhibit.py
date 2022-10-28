@@ -90,12 +90,13 @@ class InhibitionServer:
             Inhibitor.uninhibit(match.group(1))
 
     def _node_added(self, ev):
-        logger.debug(f'New node {ev.pathname} found')
+        logger.debug(f'New device {ev.pathname} found')
         time.sleep(0.25)  # Wait a quarter second for nodes to enumerate
         self.watch(ev.pathname)
 
     def _hidraw_process(self, ev):
         if ev.mask & pyinotify.IN_DELETE_SELF:
+            logger.debug(f'Device {ev.path} removed')
             self._inotify.del_watch(ev.wd)
             return
         self._check(ev.path)
