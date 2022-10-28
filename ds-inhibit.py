@@ -68,6 +68,11 @@ class InhibitionServer:
 
     def _stop(self):
         logger.info('Stopping server')
+        for watch in self._inotify.watches.values():
+            match = self.MATCH.match(watch.path)
+            if not match:
+                continue
+            Inhibitor.uninhibit(match.group(1))
 
     def _node_added(self, ev):
         self.watch(ev.path)
@@ -118,8 +123,10 @@ class InhibitionServer:
     def serve(self):
         self._start()
 
-        while self.running:
+        try:
             self.poll()
+        except (KeyboardInterrupt, OSError):
+            pass
 
         self._stop()
 
