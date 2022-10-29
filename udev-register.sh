@@ -10,3 +10,4 @@ if [ ! -e /sys/$1/mouse* ]; then
 fi
 
 chmod g+w $NODE
+chgrp deck $NODE
