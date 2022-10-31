@@ -13,7 +13,7 @@ import time
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
-formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
+formatter = logging.Formatter('%(levelname)s: %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
@@ -27,6 +27,10 @@ class Inhibitor:
     @classmethod
     def can_inhibit(cls, id: int) -> bool:
         logger.debug(f'Checking if hidraw{id} can be inhibited')
+        driver = os.readlink(f'/sys/class/hidraw/hidraw{id}/device/driver').split('/')
+        if driver[-1] not in ('sony', 'playstation'):
+            logger.debug(f'Not a PlayStation controller')
+            return False
         nodes = cls.get_nodes(id)
         if not nodes:
             logger.debug(f'No nodes to inhibit')

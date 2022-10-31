@@ -7,7 +7,7 @@
 Description=DualShock 4/DualSense mouse inhibitor
 
 [Service]
-User=deck
+User=root
 ExecStart=/usr/bin/ds-inhibit
 
 [Install]
