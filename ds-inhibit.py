@@ -21,19 +21,27 @@ logger.addHandler(handler)
 class Inhibitor:
     @classmethod
     def get_nodes(cls, id: int) -> list[str]:
-        devs = glob.glob(f'/sys/class/hidraw/hidraw{id}/device/input/input*')
+        try:
+            devs = glob.glob(f'/sys/class/hidraw/hidraw{id}/device/input/input*')
+        except OSError as e:
+            logger.warning(f'Failed to list inputs for hidraw{id}', exc_info=e)
+            return []
         return [f'{d}/inhibited' for d in devs if glob.glob(f'{d}/mouse*')]
 
     @classmethod
     def can_inhibit(cls, id: int) -> bool:
         logger.debug(f'Checking if hidraw{id} can be inhibited')
-        driver = os.readlink(f'/sys/class/hidraw/hidraw{id}/device/driver').split('/')
+        try:
+            driver = os.readlink(f'/sys/class/hidraw/hidraw{id}/device/driver').split('/')
+        except OSError as e:
+            logger.warning(f'Failed to find associated driver for hidraw{id}', exc_info=e)
+            return False
         if driver[-1] not in ('sony', 'playstation'):
-            logger.debug(f'Not a PlayStation controller')
+            logger.debug('Not a PlayStation controller')
             return False
         nodes = cls.get_nodes(id)
         if not nodes:
-            logger.debug(f'No nodes to inhibit')
+            logger.debug('No nodes to inhibit')
             return False
         for node in nodes:
             if not os.access(node, os.W_OK):
@@ -45,14 +53,20 @@ class Inhibitor:
     @classmethod
     def inhibit(cls, id: int):
         for node in cls.get_nodes(id):
-            with open(node, 'w') as f:
-                f.write('1\n')
+            try:
+                with open(node, 'w') as f:
+                    f.write('1\n')
+            except OSError as e:
+                logger.error(f'Failed to inhibit hidraw{id}', exc_info=e)
 
     @classmethod
     def uninhibit(cls, id: int):
         for node in cls.get_nodes(id):
-            with open(node, 'w') as f:
-                f.write('0\n')
+            try:
+                with open(node, 'w') as f:
+                    f.write('0\n')
+            except OSError as e:
+                logger.error(f'Failed to uninhibit hidraw{id}', exc_info=e)
 
 
 class InhibitionServer:
