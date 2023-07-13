@@ -167,7 +167,7 @@ class InhibitionServer:
         self._stop()
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover
     logger.setLevel(logging.INFO)
     server = InhibitionServer()
     server.serve()

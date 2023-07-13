@@ -4,5 +4,5 @@ udevdir := $(shell pkg-config --define-variable=prefix=$(prefix) --variable=udev
                      || echo $(libdir)/udev/)
 
 install:
-	install -D -m755 ds-inhibit.py "$(DESTDIR)/usr/bin/ds-inhibit"
+	install -D -m755 ds_inhibit.py "$(DESTDIR)/usr/bin/ds-inhibit"
 	install -D -m644 systemd.service "$(DESTDIR)$(systemdunitsdir)/ds-inhibit.service"
